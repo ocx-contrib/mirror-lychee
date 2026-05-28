@@ -9,32 +9,26 @@ source:
   repo: lychee
   tag_pattern: "^lychee-v(?P<version>\\d+\\.\\d+\\.\\d+)$"
 
-# Platform notes (verified against v0.22.0 / v0.23.0 releases):
-# - No darwin/amd64: lychee does not ship an Intel macOS binary
+# Platform notes (verified against v0.24.2 release assets):
 # - No linux musl: gnu-libc builds only
-# - windows/amd64 ships a raw .exe rather than an archive, handled via the
-#   per-platform asset_type override below.
+# - No windows/arm64: upstream does not ship one
+# - Assets ship as archives wrapped in `lychee-<triple>/` (since 0.24);
+#   stripped via strip_components: 1.
 assets:
   linux/amd64:
     - "lychee-x86_64-unknown-linux-gnu\\.tar\\.gz$"
   linux/arm64:
     - "lychee-aarch64-unknown-linux-gnu\\.tar\\.gz$"
+  darwin/amd64:
+    - "lychee-x86_64-apple-darwin\\.tar\\.gz$"
   darwin/arm64:
-    - "lychee-arm64-macos\\.tar\\.gz$"
+    - "lychee-aarch64-apple-darwin\\.tar\\.gz$"
   windows/amd64:
-    - "lychee-x86_64-windows\\.exe$"
+    - "lychee-x86_64-pc-windows-msvc\\.zip$"
 
-# Linux/macOS ship tarballs with the binary at the archive root (no wrapper
-# directory — strip_components: 0). Windows ships a raw .exe; the per-platform
-# override treats it as a standalone binary.
 asset_type:
-  default:
-    type: archive
-    strip_components: 0
-  platforms:
-    windows/amd64:
-      type: binary
-      name: lychee
+  type: archive
+  strip_components: 1
 
 metadata:
   default: metadata.json
@@ -44,7 +38,7 @@ cascade: true
 build_timestamp: none
 
 versions:
-  min: "0.20.0"
+  min: "0.24.1"
   new_per_run: 10
 
 verify:
