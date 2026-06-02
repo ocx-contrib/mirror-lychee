@@ -97,6 +97,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - platform: linux/amd64
+            platform_slug: linux_amd64
+            runner: ubuntu-latest
+            container_id: _native_
+            shell: bash
+            tests:
+              - name: smoke
+                kind: script
+                script: tests/smoke.star
+          - platform: linux/arm64
+            platform_slug: linux_arm64
+            runner: ubuntu-24.04-arm
+            container_id: _native_
+            shell: bash
+            tests:
+              - name: smoke
+                kind: script
+                script: tests/smoke.star
 
     runs-on: ${{ matrix.runner }}
     steps:
@@ -128,6 +146,57 @@ jobs:
           VERSIONS='${{ needs.discover.outputs.versions }}'
           for VERSION in $(echo "${VERSIONS}" | jq -r '.[].version' | tr -d '\r'); do
             BUNDLE="bundles/bundle-${VERSION}-${{ matrix.platform_slug }}.tar.xz"
+            METADATA_SIBLING="${BUNDLE%.tar.xz}-metadata.json"
+            mkdir -p junit
+            JUNIT_FILE="junit/junit-${VERSION}-${{ matrix.platform_slug }}-${{ matrix.container_id }}.xml"
+            TESTS_JSON='${{ toJson(matrix.tests) }}'
+            TEST_COUNT=$(echo "${TESTS_JSON}" | jq 'length')
+            FAILURES=0
+            CASES=""
+            for i in $(seq 0 $((TEST_COUNT - 1))); do
+              TEST_NAME=$(echo "${TESTS_JSON}" | jq -r ".[$i].name")
+              TEST_KIND=$(echo "${TESTS_JSON}" | jq -r ".[$i].kind")
+              START=$(date +%s)
+              RC=0
+              if [ "${TEST_KIND}" = "command" ]; then
+                TEST_CMD=$(echo "${TESTS_JSON}" | jq -r ".[$i].command")
+                ocx package test --platform "${{ matrix.platform }}" --identifier "ocx.sh/lychee:${VERSION}" "${BUNDLE}" -- \
+                  ${{ matrix.shell }} -c "${TEST_CMD}" || RC=$?
+              elif [ "${TEST_KIND}" = "script" ]; then
+                TEST_SCRIPT=$(echo "${TESTS_JSON}" | jq -r ".[$i].script")
+                ocx package test --platform "${{ matrix.platform }}" --identifier "ocx.sh/lychee:${VERSION}" "${BUNDLE}" \
+                  --script "${TEST_SCRIPT}" || RC=$?
+              else
+                TEST_INLINE=$(echo "${TESTS_JSON}" | jq -r ".[$i].script_inline")
+                printf '%s' "${TEST_INLINE}" | ocx package test --platform "${{ matrix.platform }}" --identifier "ocx.sh/lychee:${VERSION}" "${BUNDLE}" \
+                  --script - || RC=$?
+              fi
+              END=$(date +%s)
+              DUR=$((END - START))
+              if [ "${RC}" -eq 0 ]; then
+                CASES="${CASES}    <testcase name=\"${TEST_NAME}\" classname=\"${VERSION}.${{ matrix.platform_slug }}.${{ matrix.container_id }}\" time=\"${DUR}\"/>\n"
+              else
+                CASES="${CASES}    <testcase name=\"${TEST_NAME}\" classname=\"${VERSION}.${{ matrix.platform_slug }}.${{ matrix.container_id }}\" time=\"${DUR}\"><failure type=\"NonZeroExit\" message=\"exit ${RC}\"/></testcase>\n"
+                FAILURES=$((FAILURES + 1))
+              fi
+            done
+            {
+              echo '<?xml version="1.0" encoding="UTF-8"?>'
+              echo "<testsuites>"
+              echo "  <testsuite name=\"${VERSION}.${{ matrix.platform_slug }}.${{ matrix.container_id }}\" tests=\"${TEST_COUNT}\" failures=\"${FAILURES}\">"
+              if [ -n "${CI_JOB_URL:-}" ]; then
+                echo "    <properties>"
+                echo "      <property name=\"ci.job.url\" value=\"${CI_JOB_URL}\"/>"
+                echo "    </properties>"
+              fi
+              printf '%b' "${CASES}"
+              echo "  </testsuite>"
+              echo "</testsuites>"
+            } > "${JUNIT_FILE}"
+            echo "wrote ${JUNIT_FILE} (tests=${TEST_COUNT}, failures=${FAILURES})"
+            if [ "${FAILURES}" -gt 0 ]; then
+              exit 1
+            fi
 
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

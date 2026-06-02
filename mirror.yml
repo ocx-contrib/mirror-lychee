@@ -15,16 +15,17 @@ source:
 # - Assets ship as archives wrapped in `lychee-<triple>/` (since 0.24);
 #   stripped via strip_components: 1.
 assets:
+  # Pass 1 — Linux only. darwin/windows staged below for Pass 2/3.
   linux/amd64:
     - "lychee-x86_64-unknown-linux-gnu\\.tar\\.gz$"
   linux/arm64:
     - "lychee-aarch64-unknown-linux-gnu\\.tar\\.gz$"
-  darwin/amd64:
-    - "lychee-x86_64-apple-darwin\\.tar\\.gz$"
-  darwin/arm64:
-    - "lychee-aarch64-apple-darwin\\.tar\\.gz$"
-  windows/amd64:
-    - "lychee-x86_64-pc-windows-msvc\\.zip$"
+  # darwin/amd64:
+  #   - "lychee-x86_64-apple-darwin\\.tar\\.gz$"
+  # darwin/arm64:
+  #   - "lychee-aarch64-apple-darwin\\.tar\\.gz$"
+  # windows/amd64:
+  #   - "lychee-x86_64-pc-windows-msvc\\.zip$"
 
 asset_type:
   type: archive
@@ -51,3 +52,26 @@ concurrency:
   rate_limit_ms: 100
   max_retries: 3
   compression_threads: 0
+
+tests:
+  - name: smoke
+    script: tests/smoke.star
+
+platforms:
+  linux/amd64:
+    runner: ubuntu-latest
+  linux/arm64:
+    runner: ubuntu-24.04-arm
+  # darwin/amd64:
+  #   runner: macos-latest
+  #   prefix: ["arch", "-x86_64"]
+  # darwin/arm64:
+  #   runner: macos-latest
+  #   shell: bash
+  # windows/amd64:
+  #   runner: windows-latest
+  #   shell: pwsh
+
+notify:
+  discord:
+    webhook_secret: OCX_MIRROR_DISCORD_HOOK
