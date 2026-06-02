@@ -20,8 +20,8 @@ assets:
     - "lychee-x86_64-unknown-linux-gnu\\.tar\\.gz$"
   linux/arm64:
     - "lychee-aarch64-unknown-linux-gnu\\.tar\\.gz$"
-  # darwin/amd64:
-  #   - "lychee-x86_64-apple-darwin\\.tar\\.gz$"
+  darwin/amd64:
+    - "^lychee-x86_64-apple-darwin\\.tar\\.gz$"
   # darwin/arm64:
   #   - "lychee-aarch64-apple-darwin\\.tar\\.gz$"
   windows/amd64:
@@ -63,9 +63,8 @@ platforms:
     runner: ubuntu-latest
   linux/arm64:
     runner: ubuntu-24.04-arm
-  # darwin/amd64:
-  #   runner: macos-latest
-  #   prefix: ["arch", "-x86_64"]
+  darwin/amd64:
+    runner: macos-14
   # darwin/arm64:
   #   runner: macos-latest
   #   shell: bash
