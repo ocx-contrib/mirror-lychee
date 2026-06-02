@@ -41,6 +41,7 @@ build_timestamp: none
 versions:
   min: "0.24.1"
   new_per_run: 10
+  poll_interval: "0 */6 * * *"
 
 verify:
   github_asset_digest: true
