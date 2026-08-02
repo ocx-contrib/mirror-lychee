@@ -1,0 +1,124 @@
+extends: ../mirror-base.yml
+
+name: lychee
+
+# Logical index package `lychee/lychee` at the physical path
+# `ghcr.io/ocx-contrib/lychee/lychee` — slash segments, never hyphen-flattened.
+# The first segment must be this repo's own GitHub owner: GITHUB_TOKEN only
+# authorises packages owned by the repo the workflow runs in.
+#
+# Tool-as-namespace: upstream's owner is the org handle `lycheeverse`, which
+# means nothing to someone who does not already know the tool, so the tool
+# names itself.
+#
+# Succeeds the flat `ocx.sh/lychee` coordinate this repository published before
+# the grouped layout, the same way mirror-kitware/cmake succeeds mirror-cmake.
+target:
+  registry: ghcr.io
+  repository: ocx-contrib/lychee/lychee
+
+source:
+  type: github_release
+  owner: lycheeverse
+  repo: lychee
+  tag_pattern: "^lychee-v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+
+# ─── libc gate (Phase 3.5) — the evidence, not the conclusion ───────────────
+#
+# Upstream ships BOTH a gnu and a musl build per Linux arch. Measured on
+# v0.24.2 (byte audit 2026-08-01, ../../.claude/libc-audit-2026-08-01.json):
+#
+#   lychee-x86_64-unknown-linux-musl.tar.gz -> lychee
+#     ELF 64-bit LSB pie executable, x86-64, static-pie linked, stripped
+#     readelf -l | grep INTERP  → (none)
+#     readelf -d | grep NEEDED  → (none)
+#   lychee-aarch64-unknown-linux-musl.tar.gz -> lychee
+#     ELF 64-bit LSB executable, ARM aarch64, statically linked, stripped
+#     INTERP → (none);  NEEDED → (none)
+#
+#   lychee-x86_64-unknown-linux-gnu.tar.gz -> lychee
+#     dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2
+#     NEEDED: libgcc_s.so.1, libm.so.6, libc.so.6, ld-linux-x86-64.so.2
+#   lychee-aarch64-unknown-linux-gnu.tar.gz -> lychee
+#     dynamically linked, interpreter /lib/ld-linux-aarch64.so.1
+#     NEEDED: libgcc_s.so.1, libpthread.so.0, libm.so.6, libdl.so.2, libc.so.6
+#
+# This mirror carries the MUSL assets. No PT_INTERP and no DT_NEEDED means the
+# artifact requires nothing of the host, so both Linux keys are BARE — no
+# `+libc.*` suffix, which would be a false requirement claim that hid the
+# package from every glibc host.  Container legs (ubuntu + alpine + fedora)
+# live in ../mirror-base.yml and are what turn that claim into evidence.
+#
+# The gnu twin is deliberately NOT published: it needs `libgcc_s.so.1`, which
+# a bare glibc base image need not carry, so under the same bare key it would
+# be a false universality claim — which is exactly the shape the flat spec this
+# replaces had. Where upstream ships both, publish only the static build.
+#
+# ─── Scope (verified against v0.24.1, the first in-range release, and v0.24.2)
+#
+# Upstream also publishes, and this mirror deliberately does not carry:
+#   lychee-i686-unknown-linux-gnu                 — no GHA runner
+#   lychee-arm-unknown-linux-musleabi(hf)         — no GHA runner
+#   lychee-armv7-unknown-linux-gnueabihf          — no GHA runner
+#   lychee-aarch64-apple-darwin.dmg               — installer, not a bundle
+#   *.sha256                                      — sidecars
+#   lychee-{x86_64,aarch64}-unknown-linux-gnu     — dynamic; see above
+#
+# The anchored ^…$ regexes are what keep those out — the flat spec's Linux and
+# Windows patterns were missing their `^`, so nothing but asset naming luck
+# stopped a future `foo-lychee-…` from matching two ways. Resolution verified
+# BOTH ways across EVERY in-range release (v0.24.1 and v0.24.2): each of the
+# five patterns matches EXACTLY one asset. A pattern matching zero is silently
+# skipped, not an error — it would yield a green run with a missing platform.
+assets:
+  linux/amd64:
+    - "^lychee-x86_64-unknown-linux-musl\\.tar\\.gz$"
+  linux/arm64:
+    - "^lychee-aarch64-unknown-linux-musl\\.tar\\.gz$"
+  darwin/amd64:
+    - "^lychee-x86_64-apple-darwin\\.tar\\.gz$"
+  darwin/arm64:
+    - "^lychee-aarch64-apple-darwin\\.tar\\.gz$"
+  windows/amd64:
+    - "^lychee-x86_64-pc-windows-msvc\\.zip$"
+
+asset_type:
+  # Every asset — tarball and zip alike — wraps its payload in a single
+  # `lychee-<triple>/` directory, so one strip level lands `lychee` (plus
+  # `docs/` and `complete/`) at the bundle content root on all five platforms.
+  # No per-platform override needed.
+  type: archive
+  strip_components: 1
+
+metadata:
+  default: metadata.json
+
+catalog:
+  logo: logo.svg
+
+versions:
+  # The `lychee-<triple>/` archive wrapper arrives in 0.24; below that floor
+  # `strip_components: 1` would strip the binary itself.
+  min: "0.24.1"
+  new_per_run: 10
+  poll_interval: "0 */6 * * *"
+
+tests:
+  # `script:` resolves from the REPOSITORY ROOT — unlike `metadata.default` and
+  # `catalog.logo` above, which resolve against this spec's own directory.
+  - name: smoke
+    script: lychee/tests/smoke.star
+
+annotations:
+  # From the Phase 1.5 license gate — dual-licensed at the user's option:
+  #   $ gh api repos/lycheeverse/lychee/contents/lychee-bin/Cargo.toml \
+  #       --jq .content | base64 -d | grep license
+  #   license = "Apache-2.0 OR MIT"
+  # Both texts ship in the upstream repo root as LICENSE-APACHE / LICENSE-MIT.
+  org.opencontainers.image.licenses: "Apache-2.0 OR MIT"
+
+announce:
+  # Spelled out, not derived from target.repository — the logical name and the
+  # physical path are related by convention only.
+  package: lychee/lychee
+  fork: ocx-contrib/index
